@@ -1,0 +1,188 @@
+set name=A_GaN_Lgd20_Buffer_5um_Substrate_sapphire_5um
+go victoryd simflags="-P 4 -160"
+###structure specification###
+MESH width=1000 space.mult=1.5
+
+X.MESH location=-2    spacing=0.5  #Source Start
+X.MESH location=-1    spacing=0.5  #source End
+X.MESH location=0     spacing=0.1
+X.MESH location=1     spacing=0.1  #Gate Start
+X.MESH location=2     spacing=0.1  #Gate End
+
+X.MESH location=5     spacing=1
+X.MESH location=6     spacing=1
+X.MESH location=7     spacing=1
+
+X.MESH location=10.0  spacing=1
+X.MESH location=22.0  spacing=0.5  #Drain Start
+X.MESH location=23.0    spacing=0.5  #Drain End
+
+Y.MESH location=-0.525 spacing=0.05
+Y.MESH location=-0.45  spacing=0.05
+Y.MESH location=-0.425 spacing=0.05
+Y.MESH location=-0.38  spacing=0.05
+Y.MESH location=-0.31  spacing=0.05
+Y.MESH location=-0.2   spacing=0.05
+Y.MESH location=-0.1   spacing=0.01
+Y.MESH location=-0.05  spacing=0.01
+Y.MESH location=0      spacing=0.001
+Y.MESH location=0.0125 spacing=0.025
+Y.MESH location=0.025  spacing=0.001
+Y.MESH location=0.03   spacing=0.5
+Y.MESH location=0.5    spacing=1   #Buffer Start
+Y.MESH location=5.0      spacing=1   #Buffer End 
+
+Y.MESH location=10.0     spacing=10  #Substrate
+
+REGION number=1 material=sapphire y.min=5.0 y.max=10.0
+REGION number=2 material=GaN y.min=0.025 y.max=5.0 substrate #buffer
+REGION number=3 material=nitride y.max=0
+REGION number=4 material=AlGaN x.comp=0.15  y.min=0 y.max=0.025 
+REGION number=5 material=AlGaN x.comp=0.15 x.min=0 x.max=2 y.min=-0.1 y.max=0 
+
+
+
+
+
+ELECTRODE name=source x.min=-2 x.max=-1 y.min=-0.30 y.max=0.0
+ELECTRODE name=gate x.min=0 x.max=2 y.min=-0.31 y.max=-0.1
+ELECTRODE name=drain x.min=22.0 x.max=23.0 y.min=-0.30 y.max=0.0
+ELECTRODE name=substrate bottom material=sapphire
+
+DOPING region=5 concentration=4e18 p.type uniform
+
+DOPING trap acceptor e.level=1.0 concentration=4e18 gaussian peak=1 \
+        characteristic=0.455 degen.fac=1 sign=1e-15 sigp=1e-15
+
+###material/physical models###
+MODELS srh auger fermi print temp=300
+MOBILITY gansat.n albrct.n bn.albrct=5e-04 an.albrct=5e-04
+MOBILITY region=5 albrct.p bp.albrct=1e04 ap.albrct=1e04
+MODELS POLARIZATION psp.scale=0.6 piezo.scale=0.6 calc.strain
+
+CONTACT name=source workfunc=4.04
+CONTACT name=drain workfunc=4.04
+
+THERMCONTACT num=1 name=substrate alpha=800
+
+###numerical methods###
+METHOD newton climit=1e-4 maxtraps=8 itlimit=20
+
+OUTPUT band.param con.band val.band charge polar.charge qss
+SAVE outfile=$"name"_Init.str
+
+###############################################################
+###SECTION 1: CAPACITANCE SIMULATION
+###############################################################
+SOLVE init
+SOLVE previous
+SOLVE vsource=0
+SOLVE vsubstrate=0
+SOLVE vgate=0
+SOLVE vdrain=0
+
+LOG outfile=$"name"_Capacitance.log
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=100.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=200.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=300.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=500.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=600.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=700.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=800.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=900.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=1000.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=1200.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=1300.0
+SOLVE name=drain ac freq=1e6 vstep=2 Vfinal=1500.0
+LOG off
+
+
+###############################################################
+###SECTION 2: ID-VG SIMULATION (Transfer Characteristics)
+###############################################################
+SOLVE init
+SOLVE previous
+SAVE outfile=$"name"_VD_IdVg_0.str
+
+LOOP steps=1
+ASSIGN name=Vds n.value=(11)
+LOAD infile=$"name"_VD_IdVg_0.str master
+SOLVE previous
+SOLVE name=drain vstep=0.5 Vfinal=$Vds
+LOG outfile=$"name"_IdVgs_$'Vds'V.log
+SOLVE Vgate=0.0 prev
+SOLVE Vstep=0.5 Vfinal=7.0 name=gate prev
+LOG off
+L.END
+
+###############################################################
+###SECTION 3: ID-VD SIMULATION (Output Characteristics)
+###############################################################
+SOLVE init
+SOLVE previous
+SAVE outfile=$"name"_VD_IdVd_0.str
+
+LOOP steps=1
+ASSIGN name=Vg n.value=(6.0)
+LOAD infile=$"name"_VD_IdVd_0.str master
+SOLVE previous
+SOLVE name=gate Vstep=0.1 Vfinal=$Vg
+LOG outfile=$"name"_VD_Vg_$'Vg'V.log
+SOLVE name=drain Vstep=0.1 Vfinal=2
+SOLVE name=drain Vstep=1 Vfinal=20
+log off
+L.END
+
+###############################################################
+###SECTION 4: BREAKDOWN SIMULATION (Dynamic Model Swap)
+###############################################################
+# from Oguzman paper.
+IMPACT selb material=GaN an1=2.98e8*3.7 an2=2.98e8*3.7 bn1=3.44e7 bn2=3.44e7 \
+            ap1=2.23e7 ap2=2.23e7 bp1=2.7e8 bp2=2.7e8 
+CONTACT name=source workfunc=4.04
+CONTACT name=drain  workfunc=4.04
+MODELS fldmob
+
+###numerical methods###
+METHOD block climit=1e-10 maxtraps=8 itlimit=50 \
+		ir.tol=1.e-35 ix.tol=1.e-35 \
+		cx.tol=1.e-20 cr.tol=1.e-20
+
+OUTPUT band.param con.band val.band charge polar.charge
+
+###solution solving###
+SOLVE init
+SOLVE previous
+SAVE outfile=$"name"_bv_beforeSweep.str
+SOLVE vdrain=0.001
+LOG outfile=$"name"_Vbr.log
+SOLVE vdrain=0.01 prev
+SOLVE vdrain=0.1 prev
+SOLVE vdrain=0.5 prev
+SOLVE vdrain=1 prev
+SOLVE vdrain=2 prev
+SOLVE vstep=2 vfinal=100 name=drain prev
+SOLVE vstep=5 vfinal=600 name=drain prev
+SOLVE vstep=5 vfinal=700 name=drain prev
+SOLVE vstep=5 vfinal=800 name=drain prev
+SOLVE vstep=5 vfinal=900 name=drain prev
+SOLVE vstep=5 vfinal=950 name=drain prev
+SOLVE vstep=5 vfinal=1200 name=drain prev
+SOLVE vstep=2 vfinal=1250 name=drain prev
+SOLVE vstep=2 vfinal=1300 name=drain prev
+SOLVE vstep=2 vfinal=1400 name=drain prev
+SOLVE vstep=2 vfinal=1500 name=drain prev
+SOLVE vstep=2 vfinal=1600 name=drain prev
+SOLVE vstep=2 vfinal=1700 name=drain prev
+SOLVE vstep=2 vfinal=1800 name=drain prev
+SAVE outfile=$"name"_VD_beforeBreakdown.str
+SOLVE vstep=2 vfinal=2000 name=drain prev
+SOLVE vstep=2 vfinal=2200 name=drain prev
+SOLVE vstep=2 vfinal=2400 name=drain prev
+SOLVE vstep=2 vfinal=2600 name=drain prev
+SOLVE vstep=2 vfinal=2800 name=drain prev
+SOLVE vstep=2 vfinal=3000 name=drain prev
+
+log off
+
+QUIT
