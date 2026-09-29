@@ -1,0 +1,18 @@
+{
+  "base": {
+    "Lg": 2.0,
+    "drain_length": 1.0,
+    "temp": 300,
+    "gate_fp": false,
+    "source_fp": false
+  },
+  "design_variants": [
+    {
+      "Lgd": 10.0,
+      "buffer_thickness": 5,
+      "substrate_material": "sapphire",
+      "substrate_thickness": 500.0,
+      "gate_fp": false,
+      "source_fp": false
+    }]
+}
